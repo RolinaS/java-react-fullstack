@@ -1,0 +1,12 @@
+.env 
+compose.prof.yml
+frontend/node_modules
+backend/target
+dist
+.DS_Store
+.idea
+.vscode
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local

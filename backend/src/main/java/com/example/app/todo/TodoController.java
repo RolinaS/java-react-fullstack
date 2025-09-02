@@ -10,6 +10,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/todos")
@@ -27,12 +28,14 @@ public class TodoController {
     }
 
     @PutMapping("/{id}")
-    public TodoDto update(@PathVariable("id") Long id, @Valid @RequestBody UpdateTodoDto in) {
+    public TodoDto update(@PathVariable Map<String, String> pathVars, @Valid @RequestBody UpdateTodoDto in) {
+        Long id = Long.valueOf(pathVars.get("id"));
         return service.update(id, in);
     }
 
     @DeleteMapping("/{id}")
-    public ResponseEntity<Void> delete(@PathVariable("id") Long id) {
+    public ResponseEntity<Void> delete(@PathVariable Map<String, String> pathVars) {
+        Long id = Long.valueOf(pathVars.get("id"));
         service.delete(id);
         return ResponseEntity.noContent().build();
     }
