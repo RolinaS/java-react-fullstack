@@ -1,0 +1,62 @@
+# Configuration Spring Boot
+# - Datasource Postgres via variables d'environnement
+# - JPA: validate le schéma (géré par Flyway)
+# - Flyway activé pour migrations
+# - Actuator expose health/info
+# - Contexte serveur pour WAR: "/app"
+
+server:
+  servlet:
+    context-path: /app
+
+spring:
+  application:
+    name: app
+  datasource:
+    url: jdbc:postgresql://${DB_HOST}:${DB_PORT}/${DB_NAME}
+    username: ${DB_USER}
+    password: ${DB_PASSWORD}
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate:
+        format_sql: true
+    open-in-view: false
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+      base-path: /api/actuator
+  endpoint:
+    health:
+      show-details: when_authorized
+
+springdoc:
+  api-docs:
+    path: /api/v3/api-docs
+  swagger-ui:
+    path: /api/swagger-ui
+
+---
+# Profil dev
+spring:
+  config:
+    activate:
+      on-profile: dev
+  jpa:
+    show-sql: true
+
+---
+# Profil prod
+spring:
+  config:
+    activate:
+      on-profile: prod
+  jpa:
+    show-sql: false 

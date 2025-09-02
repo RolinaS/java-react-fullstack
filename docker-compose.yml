@@ -1,0 +1,121 @@
+# Environnement de développement
+# - postgres avec volume persistant
+# - backend-builder: construit un WAR et le dépose dans ./dist
+# - tomcat: déploie le WAR du dossier dist au démarrage
+# - frontend: Vite dev server
+# - nginx: reverse proxy unifiant les origines (/, /api)
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: jr_postgres
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    ports:
+      - "${POSTGRES_PORT}:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks:
+      - internal
+
+  backend-builder:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    image: jr_backend_builder:latest
+    container_name: jr_backend_builder
+    env_file: .env
+    environment:
+      - DB_HOST=${DB_HOST}
+      - DB_PORT=${DB_PORT}
+      - DB_NAME=${DB_NAME}
+      - DB_USER=${DB_USER}
+      - DB_PASSWORD=${DB_PASSWORD}
+    volumes:
+      - ./dist:/dist
+      - ./backend:/workspace
+      - maven-repo:/root/.m2
+    command: ["/bin/sh", "-c", "mvn -U -q -DskipTests clean package && cp -f target/*.war /dist/app.war"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - internal
+
+  tomcat:
+    build:
+      context: ./tomcat
+      dockerfile: Dockerfile
+    image: jr_tomcat:latest
+    container_name: jr_tomcat
+    env_file: .env
+    environment:
+      - BACKEND_PORT=${BACKEND_PORT}
+    volumes:
+      - ./dist:/opt/dist
+    ports:
+      - "${BACKEND_PORT}:8080"
+    depends_on:
+      backend-builder:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/app/api/actuator/health | grep -q 'UP'"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks:
+      - internal
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    image: jr_frontend:dev
+    container_name: jr_frontend
+    environment:
+      - VITE_API_BASE=/api
+      - CHOKIDAR_USEPOLLING=true
+      - WATCHPACK_POLLING=true
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    ports:
+      - "${FRONTEND_PORT}:5173"
+    networks:
+      - internal
+
+  nginx:
+    build:
+      context: ./reverse-proxy
+      dockerfile: Dockerfile
+    image: jr_nginx:latest
+    container_name: jr_nginx
+    ports:
+      - "${NGINX_PORT}:80"
+    depends_on:
+      - frontend
+      - tomcat
+    volumes:
+      - ./frontend/dist:/usr/share/nginx/html:ro
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost/ | grep -q '<' "]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks:
+      - internal
+
+networks:
+  internal:
+    driver: bridge
+
+volumes:
+  pgdata:
+  maven-repo: 
